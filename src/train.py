@@ -34,7 +34,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import RandomizedSearchCV, StratifiedKFold, cross_val_score
 
 from src.data_loader import load_raw_data
-from src.feature_engineering import add_engineered_features, resample
+from src.feature_engineering import add_engineered_features, add_kmeans_cluster_features, resample
 from src.preprocessing import clean_data, save_processed_splits, scale_features, split_data
 from src.utils import RANDOM_SEED, get_logger, measure_time, save_json, save_model, set_global_seed
 
@@ -252,6 +252,7 @@ def build_training_data(
     df = clean_data(df)
     df = add_engineered_features(df)
     df = scale_features(df, fit=True)
+    df = add_kmeans_cluster_features(df, n_clusters=5, fit=True)  # adds cluster_id + dist_to_centroid
 
     X_train, X_test, y_train, y_test = split_data(df)
     save_processed_splits(X_train, X_test, y_train, y_test)

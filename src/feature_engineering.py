@@ -215,3 +215,88 @@ def resample(
             f"Unknown strategy '{strategy}'. Choose from {list(RESAMPLING_STRATEGIES)}"
         )
     return RESAMPLING_STRATEGIES[strategy](X, y)
+
+
+# ─────────────────────────────────────────────────────────────────────────── #
+# K-Means Clustering — transaction segment features
+# ─────────────────────────────────────────────────────────────────────────── #
+def add_kmeans_cluster_features(
+    df: pd.DataFrame,
+    n_clusters: int = 5,
+    fit: bool = True,
+    model_path: str = "models/kmeans.joblib",
+) -> pd.DataFrame:
+    """
+    Apply K-Means clustering on the scaled Amount and Time features
+    (plus V1-V28) to generate a ``cluster_id`` label and a
+    ``dist_to_centroid`` distance feature for each transaction.
+
+    Rationale
+    ---------
+    Fraud transactions often cluster differently from legitimate ones.
+    By adding the cluster assignment and distance-to-centroid as
+    features, we give downstream classifiers a pre-computed
+    "neighbourhood" signal that can improve separability — especially
+    for tree-based models and XGBoost which can exploit non-linear
+    cluster boundaries.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame with scaled features already applied (scaled_amount,
+        scaled_time, V1-V28). Must NOT contain the target column.
+    n_clusters : int, optional
+        Number of K-Means clusters, by default 5.
+    fit : bool, optional
+        If True, fit a new K-Means model and persist it.
+        If False, load an existing model (inference time).
+    model_path : str, optional
+        Path for persisting / loading the fitted KMeans model.
+
+    Returns
+    -------
+    pd.DataFrame
+        Original DataFrame with two new columns added:
+        ``cluster_id`` (int) and ``dist_to_centroid`` (float).
+    """
+    import joblib
+    import os
+    from pathlib import Path
+    from sklearn.cluster import KMeans
+
+    df = df.copy()
+
+    # Use all feature columns (exclude target if present)
+    feature_cols = [c for c in df.columns if c != "Class"]
+    X = df[feature_cols].values
+
+    path = Path(model_path)
+
+    if fit:
+        kmeans = KMeans(n_clusters=n_clusters, random_state=RANDOM_SEED, n_init=10)
+        kmeans.fit(X)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        joblib.dump(kmeans, path)
+        logger.info("Fitted KMeans (k=%d) and saved to %s", n_clusters, path)
+    else:
+        if not path.exists():
+            raise FileNotFoundError(
+                f"No fitted KMeans model at {path}. Run with fit=True first."
+            )
+        kmeans = joblib.load(path)
+        logger.info("Loaded KMeans model from %s", path)
+
+    df["cluster_id"] = kmeans.predict(X)
+
+    # Distance of each transaction to its assigned centroid
+    centroids = kmeans.cluster_centers_
+    df["dist_to_centroid"] = np.linalg.norm(
+        X - centroids[df["cluster_id"].values], axis=1
+    )
+
+    logger.info(
+        "Added cluster features: cluster_id, dist_to_centroid | "
+        "cluster distribution: %s",
+        pd.Series(df["cluster_id"]).value_counts().to_dict(),
+    )
+    return df
