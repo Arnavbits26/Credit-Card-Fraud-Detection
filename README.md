@@ -119,24 +119,55 @@ Credit-Card-Fraud-Detection/
 ## 🏗 Architecture / Workflow
 
 ```
- ┌────────────────┐    ┌──────────────────┐    ┌────────────────────┐
- │  data_loader.py │ →  │  preprocessing.py │ →  │ feature_engineering│
- │ load raw CSV    │    │ clean, scale,      │    │ .py                │
- │ schema validate │    │ stratified split   │    │ resample (SMOTE)   │
- └────────────────┘    └──────────────────┘    └────────────────────┘
-                                                          │
-                                                          ▼
- ┌────────────────┐    ┌──────────────────┐    ┌────────────────────┐
- │   predict.py    │ ←  │    models/*.joblib│ ←  │     train.py       │
- │ score new data  │    │  (persisted)      │    │ CV + tuning + fit  │
- └────────────────┘    └──────────────────┘    └────────────────────┘
-         │                                                │
-         ▼                                                ▼
- ┌────────────────┐                              ┌────────────────────┐
- │    app.py       │                              │    evaluate.py      │
- │ Streamlit UI    │                              │ metrics, plots,      │
- │                 │                              │ comparison, ranking  │
- └────────────────┘                              └────────────────────┘
+                    ┌───────────────────┐
+                    │  data_loader.py   │
+                    │                   │
+                    │   Load raw CSV,   │
+                    │ schema validation │
+                    └───────────────────┘
+                              │
+               ┌──────────────────────────────┐
+               │       preprocessing.py       │
+               │                              │
+               │ Clean, scale (RobustScaler), │
+               │ stratified train/test split  │
+               └──────────────────────────────┘
+                              │
+              ┌───────────────────────────────┐
+              │    feature_engineering.py     │
+              │                               │
+              │       Derived features,       │
+              │ resample training set (SMOTE) │
+              └───────────────────────────────┘
+                              │
+                ┌────────────────────────────┐
+                │          train.py          │
+                │                            │
+                │   Stratified k-fold CV,    │
+                │ hyperparameter tuning, fit │
+                └────────────────────────────┘
+                              │
+                ┌────────────────────────────┐
+                │      models/*.joblib       │
+                │ (persisted trained models) │
+                └────────────────────────────┘
+                              │
+                              ▼
+   ┌──────────────────────┐      ┌────────────────────────┐
+   │      predict.py      │      │      evaluate.py       │
+   │                      │      │                        │
+   │      Score new,      │      │    Metrics, plots,     │
+   │      unlabeled       │      │   comparison table,    │
+   │     transactions     │      │     model ranking      │
+   └──────────────────────┘      └────────────────────────┘
+               │
+               ▼
+┌──────────────────────────────┐
+│            app.py            │
+│                              │
+│         Streamlit UI         │
+│ (interactive fraud scoring)  │
+└──────────────────────────────┘
 ```
 
 **Pipeline flow:**
